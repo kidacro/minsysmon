@@ -1,0 +1,6 @@
+# Build artifacts
+/sysmon
+*.o
+
+# OS cruft
+.DS_Store

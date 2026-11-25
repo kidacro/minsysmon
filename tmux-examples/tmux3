@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# tmux3 - manage a 3-pane tmux window, replacing the command in any pane.
+set -euo pipefail
+
+readonly DEFAULT_SESSION="three"
+readonly WINDOW_NAME="panes"
+readonly PANE_COUNT=3
+# Run in the pane via its shell: read the stored command, then drop to a shell.
+readonly RESPAWN_CMD='eval "$(tmux show-option -pv -t "$TMUX_PANE" @tmux3_cmd)"; exec "${SHELL:-/bin/bash}"'
+
+usage() {
+  cat <<'EOF'
+Usage: tmux3 [-s SESSION] PANE COMMAND [PANE COMMAND ...]
+
+Create (on first use) and update a 3-pane tmux window (3 columns x 1 row).
+Panes are numbered left-to-right, 1 through 3; each pane's command is
+replaced in place by the supplied one.
+A command may be any shell command string; when it finishes, the pane
+returns to an interactive shell.
+
+Options:
+  -s SESSION   Session name (default: three)
+  -N           Do not attach, even on first creation
+  -h           Show this help
+
+Examples:
+  tmux3 1 htop 2 "tail -f /var/log/syslog" 3 "watch -n1 df -h"
+  tmux3 -s work 2 "ssh server" 3 "vim"
+EOF
+}
+
+die() {
+  printf 'tmux3: %s\n' "$*" >&2
+  exit 1
+}
+
+command -v tmux >/dev/null 2>&1 || die "tmux not found in PATH"
+
+session="$DEFAULT_SESSION"
+do_attach=1
+while getopts ":hNs:" opt; do
+  case "$opt" in
+    h) usage; exit 0 ;;
+    N) do_attach=0 ;;
+    s) session="$OPTARG" ;;
+    \?) die "unknown option -$OPTARG (try -h)" ;;
+    :) die "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(( OPTIND - 1 ))
+
+(( $# > 0 )) || { usage >&2; die "no panes specified"; }
+(( $# % 2 == 0 )) || die "expected pane/command pairs, got an odd number of arguments"
+[[ -n $session ]] || die "session name must not be empty"
+
+args=("$@")
+panes=()
+cmds=()
+seen=()
+for (( i = 0; i < ${#args[@]}; i += 2 )); do
+  pane="${args[i]}"
+  cmd="${args[i + 1]}"
+  [[ $pane =~ ^[1-3]$ ]] || die "invalid pane number '$pane' (expected 1-3)"
+  [[ -n $cmd ]] || die "empty command for pane $pane"
+  for s in "${seen[@]}"; do
+    [[ $s == "$pane" ]] && die "pane $pane specified more than once"
+  done
+  seen+=("$pane")
+  panes+=("$pane")
+  cmds+=("$cmd")
+done
+
+session_exists() {
+  tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -Fxq -- "$session"
+}
+
+find_window() {
+  tmux list-windows -t "$session" -F '#{window_id} #{@tmux3_window}' 2>/dev/null |
+    awk '$2 == 1 { print $1; exit }'
+}
+
+verify_window() {
+  local wid="$1"
+  local -a nums=()
+  mapfile -t nums < <(tmux list-panes -t "$wid" -F '#{@pane_no}' 2>/dev/null | sort -n)
+  (( ${#nums[@]} == PANE_COUNT )) ||
+    die "session '$session' does not have $PANE_COUNT tagged panes; recreate it with 'tmux kill-session -t $session' and run tmux3 again"
+  local n
+  for (( i = 0; i < PANE_COUNT; i++ )); do
+    n=$(( i + 1 ))
+    [[ ${nums[i]} == "$n" ]] ||
+      die "session '$session' is missing pane tag $n; recreate it with 'tmux kill-session -t $session' and run tmux3 again"
+  done
+}
+
+create_session() {
+  local top_left top_middle top_right window_id
+  top_left=$(tmux new-session -d -s "$session" -n "$WINDOW_NAME" -P -F '#{pane_id}') ||
+    die "failed to create tmux session '$session'"
+  top_middle=$(tmux split-window -h -t "$top_left" -P -F '#{pane_id}') || die "failed to create the middle column"
+  top_right=$(tmux split-window -h -t "$top_middle" -P -F '#{pane_id}') || die "failed to create the right column"
+
+  # Number panes left-to-right: 1 2 3.
+  local -a ids=("$top_left" "$top_middle" "$top_right")
+  for (( i = 0; i < PANE_COUNT; i++ )); do
+    tmux set-option -p -t "${ids[i]}" @pane_no "$(( i + 1 ))"
+  done
+  tmux select-layout -E -t "$session:$WINDOW_NAME"
+
+  window_id=$(tmux list-windows -t "$session" -F '#{window_id}' | head -n 1)
+  [[ -n $window_id ]] || die "could not find the new window"
+  tmux set-option -w -t "$window_id" @tmux3_window 1
+  printf '%s\n' "$window_id"
+}
+
+pane_id_for() {
+  tmux list-panes -t "$1" -F '#{pane_id} #{@pane_no}' |
+    awk -v n="$2" '$2 == n { print $1; exit }'
+}
+
+apply_command() {
+  local wid="$1" pane="$2" cmd="$3"
+  local pid
+  pid=$(pane_id_for "$wid" "$pane")
+  [[ -n $pid ]] || die "could not resolve pane $pane"
+  tmux set-option -p -t "$pid" @tmux3_cmd "$cmd"
+  tmux respawn-pane -k -t "$pid" "$RESPAWN_CMD"
+}
+
+created=0
+if session_exists; then
+  wid=$(find_window)
+  [[ -n $wid ]] || die "session '$session' exists but has no tmux3 window"
+  verify_window "$wid"
+else
+  wid=$(create_session)
+  created=1
+fi
+
+# Resolve all target pane IDs before respawning anything.
+ids=()
+for pane in "${panes[@]}"; do
+  pid=$(pane_id_for "$wid" "$pane")
+  [[ -n $pid ]] || die "could not resolve pane $pane"
+  ids+=("$pid")
+done
+
+# If called from one of our own panes, do that one last: respawn kills the
+# process running this script.
+self_pane="${TMUX_PANE:-}"
+deferred=-1
+for (( i = 0; i < ${#panes[@]}; i++ )); do
+  if [[ -n $self_pane && ${ids[i]} == "$self_pane" ]]; then
+    deferred=$i
+    continue
+  fi
+  apply_command "$wid" "${panes[i]}" "${cmds[i]}"
+done
+if (( deferred >= 0 )); then
+  apply_command "$wid" "${panes[deferred]}" "${cmds[deferred]}"
+fi
+
+if (( created && do_attach )); then
+  if [[ -n ${TMUX:-} ]]; then
+    tmux switch-client -t "$session"
+  else
+    tmux attach-session -t "$session"
+  fi
+fi
