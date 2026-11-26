@@ -119,8 +119,8 @@ tmux-examples/tmux3 1 'ssh -t pve "bash -ic '\''minsysmon -n 10 -s \"journalctl 
 # Three columns by two rows, numbered left-to-right, top-to-bottom (1-6)
 tmux-examples/tmux6 -N -s monitors \
 1 ~/.local/bin/minsysmon -n 20 -d 3 \
-2 'ssh -t bazzite "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
-3 'ssh -t steamdeck "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
+2 'ssh -t bazzite "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"' \
+3 'ssh -t steamdeck "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"' \
 4 "journalctl -f" \
 5 iostat --pretty \
 6 ifstat -p
