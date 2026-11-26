@@ -111,11 +111,19 @@ monitoring window. They create the session on first use and afterwards replace
 the command in individual panes in place.
 
 ```bash
-# Three columns: minsysmon on the left, a log in the middle, htop on the right
-tmux-examples/tmux3 1 ./minsysmon 2 "tail -f /var/log/syslog" 3 htop
+# Three columns: minsysmon on the left on pve host, minsysmon in the middle on current host, minsysmon on steamdeck on the right
+tmux-examples/tmux3 1 'ssh -t pve "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"' \
+2 "minsysmon -n 5 -l /var/logs/comfyui.txt -t 44" \
+3 'ssh -t steamdeck "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
 
 # Three columns by two rows, numbered left-to-right, top-to-bottom (1-6)
-tmux-examples/tmux6 -N -s monitors 1 ./minsysmon 4 "journalctl -f" 6 htop
+tmux-examples/tmux6 -N -s monitors \
+1 ~/.local/bin/minsysmon -n 20 -d 3 \
+2 'ssh -t bazzite "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
+3 'ssh -t steamdeck "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
+4 "journalctl -f" \
+5 iostat iostat --pretty \
+6 ifstat -p
 ```
 
 Both scripts accept `-s SESSION` to choose a session name (defaults: `three`
