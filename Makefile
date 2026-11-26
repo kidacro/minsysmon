@@ -7,7 +7,7 @@ DESTDIR ?=
 TARGET = sysmon
 SRC = sysmon.c
 
-.PHONY: all clean install
+.PHONY: all clean install test
 
 all: $(TARGET)
 
@@ -17,6 +17,10 @@ $(TARGET): $(SRC)
 install: $(TARGET)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
+
+# Runs via the interpreter so it also works on noexec mounts.
+test:
+	bash tests/run.sh
 
 clean:
 	rm -f $(TARGET)

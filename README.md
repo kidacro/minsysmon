@@ -62,6 +62,22 @@ make install PREFIX=$HOME/.local     # or install to a user prefix
 
 `DESTDIR` is honored for staged installs.
 
+## Tests
+
+```bash
+make test
+```
+
+The suite compiles into a temporary directory and runs from there, so it also
+works on mounts that disallow execution. A strict `-std=c11 -Werror` build, CLI
+validation, and a staged install are always checked. If `tmux` is available,
+the suite also verifies TUI rendering, prompt `q` handling, and clean `SIGINT`
+exit; otherwise those checks are skipped.
+
+Set `CC`, `LDLIBS`, or `TMPDIR` to override the compiler, linker flags, or
+temporary directory used by the tests. If you override `TMPDIR`, point it at a
+directory that allows execution.
+
 ## Usage
 
 ```bash
