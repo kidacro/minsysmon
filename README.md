@@ -7,6 +7,8 @@ command, all refreshed together.
 
 It reads system counters from `/proc`, so it is Linux-specific.
 
+![minsysmon screenshot](screenshot.webp)
+
 ## Why?
 
 I wanted a minimal system monitor that could be used in tmux cleanly. I use 6
