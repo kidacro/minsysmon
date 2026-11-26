@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,13 +12,22 @@
 #include <signal.h>
 #include <limits.h>
 #include <ctype.h>
+
+#define SYSMON_VERSION "0.1.0"
 #define MAX_PROCS 100
 #define MIN_DISPLAY_PROCS 1
 #define MAX_DISPLAY_PROCS 20
 #define DEFAULT_DISPLAY_PROCS 3
 
+static volatile sig_atomic_t stop_requested = 0;
+
+static void request_stop(int sig) {
+    (void)sig;
+    stop_requested = 1;
+}
+
 // Function to get the hostname
-char* get_hostname() {
+char* get_hostname(void) {
     struct utsname name;
     if (uname(&name) == 0) {
         return strdup(name.nodename);
@@ -59,7 +70,7 @@ typedef struct {
     unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
 } CPUStats;
 
-CPUStats get_cpu_stats() {
+CPUStats get_cpu_stats(void) {
     CPUStats stats;
     FILE *fp = fopen("/proc/stat", "r");
     if (fp == NULL) {
@@ -79,7 +90,7 @@ CPUStats get_cpu_stats() {
 static CPUStats prev_stats;
 static double last_process_sample_interval = 0.0;
 
-double get_cpu_usage() {
+double get_cpu_usage(void) {
     CPUStats curr_stats = get_cpu_stats();
     
     unsigned long long prev_idle = prev_stats.idle + prev_stats.iowait;
@@ -117,7 +128,7 @@ typedef struct {
     double cpu_usage;
 } ProcessCPUStats;
 
-MemoryStats get_memory_stats() {
+MemoryStats get_memory_stats(void) {
     MemoryStats stats = {0, 0, 0.0};
     FILE *fp = fopen("/proc/meminfo", "r");
     if (fp == NULL) return stats;
@@ -342,7 +353,7 @@ typedef struct {
     unsigned long long free;
     double usage;
 } SwapStats;
-SwapStats get_swap_stats() {
+SwapStats get_swap_stats(void) {
     SwapStats stats = {0, 0, 0.0};
     FILE *fp = fopen("/proc/meminfo", "r");
     if (fp == NULL) return stats;
@@ -903,11 +914,11 @@ void center_text(WINDOW *win, int y, const char *text) {
     print_clipped(win, y, start_x, text);
 }
 
-static void print_usage(const char *prog) {
-    fprintf(stderr,
+static void print_usage(FILE *out, const char *prog) {
+    fprintf(out,
             "Usage: %s [-d|--delay <seconds>] [-n|--processes <count>]\n"
             "          [-l|--log <logfile> | -s|--shell <command>]\n"
-            "          [-t|--taillines <count>] [-h|--help]\n"
+            "          [-t|--taillines <count>] [-h|--help] [-V|--version]\n"
             "  -d, --delay <seconds>    Refresh delay in whole seconds (default: 5)\n"
             "  -n, --processes <count>  Number of top CPU processes to display\n"
             "                           (%d-%d, default: %d)\n"
@@ -922,9 +933,26 @@ static void print_usage(const char *prog) {
             "                           so child stderr does not overwrite the screen\n"
             "                           Example: sysmon -s 'journalctl -n 10 --no-pager 2>&1'\n"
             "  -t, --taillines <count>  Tail lines for -l or -s (%d-%d, default: %d)\n"
-            "  -h, --help               Show this help\n",
+            "  -h, --help               Show this help\n"
+            "  -V, --version            Show version and exit\n",
             prog, MIN_DISPLAY_PROCS, MAX_DISPLAY_PROCS, DEFAULT_DISPLAY_PROCS,
             MIN_TAIL_LINES, MAX_TAIL_LINES, DEFAULT_TAIL_LINES);
+}
+
+// Wait for the refresh interval while still reacting to 'q' or a signal
+// promptly. Returns 1 when it is time to quit.
+static int wait_for_refresh(unsigned int delay) {
+    const unsigned long poll_ms = 100;
+    unsigned long long remaining_ms = (unsigned long long)delay * 1000ULL;
+
+    while (remaining_ms > 0 && !stop_requested) {
+        timeout((int)poll_ms);
+        if (getch() == 'q') return 1;
+        remaining_ms = (remaining_ms > poll_ms) ? remaining_ms - poll_ms : 0;
+    }
+
+    timeout(0);
+    return stop_requested != 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -938,21 +966,21 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--log") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "Missing value for %s\n", argv[i]);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             logfile = argv[++i];
         } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--shell") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "Missing value for %s\n", argv[i]);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             shell_command = argv[++i];
         } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--taillines") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "Missing value for %s\n", argv[i]);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             char *value = argv[++i];
@@ -962,14 +990,14 @@ int main(int argc, char *argv[]) {
                 count < MIN_TAIL_LINES || count > MAX_TAIL_LINES) {
                 fprintf(stderr, "Invalid tail line count: %s (expected a whole number from %d to %d)\n",
                         value, MIN_TAIL_LINES, MAX_TAIL_LINES);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             tail_lines = (int)count;
         } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--delay") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "Missing value for %s\n", argv[i]);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             char *value = argv[++i];
@@ -977,14 +1005,14 @@ int main(int argc, char *argv[]) {
             long seconds = strtol(value, &end, 10);
             if (end == value || *end != '\0' || seconds <= 0 || seconds > INT_MAX) {
                 fprintf(stderr, "Invalid delay: %s (expected a positive whole number of seconds)\n", value);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             delay = (unsigned int)seconds;
         } else if (strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "--processes") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "Missing value for %s\n", argv[i]);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             char *value = argv[++i];
@@ -994,25 +1022,31 @@ int main(int argc, char *argv[]) {
                 count < MIN_DISPLAY_PROCS || count > MAX_DISPLAY_PROCS) {
                 fprintf(stderr, "Invalid process count: %s (expected a whole number from %d to %d)\n",
                         value, MIN_DISPLAY_PROCS, MAX_DISPLAY_PROCS);
-                print_usage(argv[0]);
+                print_usage(stderr, argv[0]);
                 return 1;
             }
             num_processes = (int)count;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            print_usage(argv[0]);
+            print_usage(stdout, argv[0]);
+            return 0;
+        } else if (strcmp(argv[i], "-V") == 0 || strcmp(argv[i], "--version") == 0) {
+            printf("sysmon %s\n", SYSMON_VERSION);
             return 0;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
-            print_usage(argv[0]);
+            print_usage(stderr, argv[0]);
             return 1;
         }
     }
 
     if (logfile != NULL && shell_command != NULL) {
         fprintf(stderr, "-l/--log and -s/--shell cannot be used together; they share the same display area\n");
-        print_usage(argv[0]);
+        print_usage(stderr, argv[0]);
         return 1;
     }
+
+    signal(SIGINT, request_stop);
+    signal(SIGTERM, request_stop);
 
     // --- Ncurses Setup ---
     initscr();          // Start curses mode
@@ -1047,12 +1081,12 @@ int main(int argc, char *argv[]) {
     
     prev_stats = get_cpu_stats();
     // Set up the refresh loop
-    while (running) {
+    while (running && !stop_requested) {
         // 1. Non-blocking check for quit command 'q'
-        nodelay(main_win, TRUE); 
+        nodelay(main_win, TRUE);
         int ch = getch();
-        
-        if (ch == 'q') {
+
+        if (ch == 'q' || stop_requested) {
             running = 0;
             break;
         }
@@ -1128,8 +1162,9 @@ int main(int argc, char *argv[]) {
             free(processes);
         }
 
-        // 4. Wait for the configured delay (default: 5 seconds)
-        sleep(delay);
+        // 4. Wait for the configured delay (default: 5 seconds), but keep
+        // checking for 'q' so the display exits promptly.
+        if (wait_for_refresh(delay)) break;
     }
 
 

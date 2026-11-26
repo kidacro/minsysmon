@@ -7,6 +7,12 @@ command, all refreshed together.
 
 It reads system counters from `/proc`, so it is Linux-specific.
 
+## Why?
+
+I wanted a minimal system monitor that could be used in tmux cleanly. I use 6
+tmux panels to monitor various hosts/logs while I'm making changes, upgrading,
+experimenting, etc.
+
 ## Features
 
 * Centered hostname and uptime (days/hours/minutes/seconds from `/proc/uptime`).
@@ -29,7 +35,8 @@ It reads system counters from `/proc`, so it is Linux-specific.
 * On some distributions `libtinfo` must be linked separately; the commands
   below include `-ltinfo`. If your system folds tinfo into ncurses, remove it.
 * Optional: `nvidia-smi` or `vulkaninfo` in `PATH` for the VRAM line.
-* Optional: `tmux` for the example scripts in `tmux-examples/`.
+* Optional: a recent `tmux` (with `select-layout -E` and pane format variables)
+  for the example scripts in `tmux-examples/`.
 
 ## Build
 
@@ -44,6 +51,16 @@ gcc -O2 -Wall -Wextra sysmon.c -o sysmon -lncurses -ltinfo
 ```
 
 Use `make clean` to remove the compiled binary.
+
+## Install
+
+```bash
+make
+sudo make install                    # installs to /usr/local/bin/sysmon
+make install PREFIX=$HOME/.local     # or install to a user prefix
+```
+
+`DESTDIR` is honored for staged installs.
 
 ## Usage
 
@@ -63,6 +80,7 @@ Use `make clean` to remove the compiled binary.
 | `-s`, `--shell <command>` | Run a command on each refresh and show its last `-t` lines |
 | `-t`, `--taillines <count>` | Tail length for `-l`/`-s`, 1–100 (default: 10) |
 | `-h`, `--help` | Show help and exit |
+| `-V`, `--version` | Show version and exit |
 
 `-l` and `-s` are mutually exclusive because they share the same display
 area. A shell command is run via `/bin/sh -c` on every refresh, so it must be
