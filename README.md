@@ -122,7 +122,7 @@ tmux-examples/tmux6 -N -s monitors \
 2 'ssh -t bazzite "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
 3 'ssh -t steamdeck "bash -ic '\''minsysmon -n 10 -s \"journalctl -n 40 --no-pager 2>&1\" -t 40'\''"'
 4 "journalctl -f" \
-5 iostat iostat --pretty \
+5 iostat --pretty \
 6 ifstat -p
 ```
 
