@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Run sysmon's regression tests. All binaries are built and executed in a
+# Run minsysmon's regression tests. All binaries are built and executed in a
 # temporary directory so this works on mounts that disallow execution.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/sysmon-test.XXXXXX")
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/minsysmon-test.XXXXXX")
 src="$tmp/src"
-bin="$tmp/bin/sysmon"
+bin="$tmp/bin/minsysmon"
 stage="$tmp/stage"
 session=""
 
@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$src" "$tmp/bin" "$stage"
-cp "$root/sysmon.c" "$root/Makefile" "$src/"
+cp "$root/minsysmon.c" "$root/Makefile" "$src/"
 
 pass=0
 failed=0
@@ -41,7 +41,7 @@ LDLIBS=${LDLIBS:--lncurses -ltinfo}
 build_log="$tmp/strict-build.log"
 # shellcheck disable=SC2086
 if $CC -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
-        "$src/sysmon.c" -o "$bin" $LDLIBS >"$build_log" 2>&1; then
+        "$src/minsysmon.c" -o "$bin" $LDLIBS >"$build_log" 2>&1; then
     ok "strict C11 build with -Werror"
 else
     not_ok "strict C11 build with -Werror"
@@ -57,7 +57,7 @@ else
 fi
 
 if make -C "$src" install DESTDIR="$stage" PREFIX=/usr \
-        >"$tmp/install.log" 2>&1 && [[ -f $stage/usr/bin/sysmon ]]; then
+        >"$tmp/install.log" 2>&1 && [[ -f $stage/usr/bin/minsysmon ]]; then
     ok "make install honors DESTDIR/PREFIX"
 else
     not_ok "make install honors DESTDIR/PREFIX"
@@ -76,13 +76,13 @@ else
 fi
 
 if "$bin" --version >"$out" 2>"$err" &&
-        grep -Fxq 'sysmon 0.1.0' "$out" && [[ ! -s $err ]]; then
+        grep -Fxq 'minsysmon 0.1.0' "$out" && [[ ! -s $err ]]; then
     ok "--version prints the version"
 else
     not_ok "--version prints the version"
 fi
 
-if "$bin" -V >"$out" 2>"$err" && grep -Fxq 'sysmon 0.1.0' "$out"; then
+if "$bin" -V >"$out" 2>"$err" && grep -Fxq 'minsysmon 0.1.0' "$out"; then
     ok "-V prints the version"
 else
     not_ok "-V prints the version"
@@ -124,7 +124,7 @@ expect_fail "rejects -l together with -s" -l /etc/hostname -s true
 
 # TUI smoke tests. tmux supplies a pty for ncurses; skip gracefully if absent.
 if command -v tmux >/dev/null 2>&1; then
-    session="sysmon-test-$$"
+    session="minsysmon-test-$$"
     tmux kill-session -t "$session" 2>/dev/null || true
     tui_status="$tmp/tui.status"
 
@@ -166,7 +166,7 @@ EOF
         not_ok "tmux could not start the TUI test"
     fi
 
-    session="sysmon-test-sig-$$"
+    session="minsysmon-test-sig-$$"
     tmux kill-session -t "$session" 2>/dev/null || true
     signal_status="$tmp/tui-signal.status"
     cat >"$tmp/tui-signal.sh" <<EOF

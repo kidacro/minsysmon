@@ -4,8 +4,8 @@ LDLIBS ?= -lncurses -ltinfo
 PREFIX ?= /usr/local
 DESTDIR ?=
 
-TARGET = sysmon
-SRC = sysmon.c
+TARGET = minsysmon
+SRC = minsysmon.c
 
 .PHONY: all clean install test
 

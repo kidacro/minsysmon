@@ -1,4 +1,4 @@
-# sysmon
+# minsysmon
 
 A small Linux system monitor for the terminal, built with ncurses. It shows
 CPU, memory, swap and optional GPU memory usage, a list of the busiest user
@@ -47,7 +47,7 @@ make
 Or compile directly:
 
 ```bash
-gcc -O2 -Wall -Wextra sysmon.c -o sysmon -lncurses -ltinfo
+gcc -O2 -Wall -Wextra minsysmon.c -o minsysmon -lncurses -ltinfo
 ```
 
 Use `make clean` to remove the compiled binary.
@@ -56,7 +56,7 @@ Use `make clean` to remove the compiled binary.
 
 ```bash
 make
-sudo make install                    # installs to /usr/local/bin/sysmon
+sudo make install                    # installs to /usr/local/bin/minsysmon
 make install PREFIX=$HOME/.local     # or install to a user prefix
 ```
 
@@ -81,11 +81,11 @@ directory that allows execution.
 ## Usage
 
 ```bash
-./sysmon                                   # defaults: 5 s delay, 3 processes
-./sysmon -d 1 -n 10                        # refresh every second, show 10 processes
-./sysmon -l /var/log/syslog -t 20           # show the last 20 lines of a log
-./sysmon -s 'journalctl -n 10 --no-pager 2>&1'
-./sysmon -h                                # full help
+./minsysmon  # defaults: 5 s delay, 3 processes
+./minsysmon -d 1 -n 10  # refresh every second, show 10 processes
+./minsysmon -l /var/log/syslog -t 20  # show the last 20 lines of a log
+./minsysmon -s 'journalctl -n 10 --no-pager 2>&1'
+./minsysmon -h  # full help
 ```
 
 | Option | Meaning |
@@ -111,11 +111,11 @@ monitoring window. They create the session on first use and afterwards replace
 the command in individual panes in place.
 
 ```bash
-# Three columns: sysmon on the left, a log in the middle, htop on the right
-tmux-examples/tmux3 1 ./sysmon 2 "tail -f /var/log/syslog" 3 htop
+# Three columns: minsysmon on the left, a log in the middle, htop on the right
+tmux-examples/tmux3 1 ./minsysmon 2 "tail -f /var/log/syslog" 3 htop
 
 # Three columns by two rows, numbered left-to-right, top-to-bottom (1-6)
-tmux-examples/tmux6 -N -s monitors 1 ./sysmon 4 "journalctl -f" 6 htop
+tmux-examples/tmux6 -N -s monitors 1 ./minsysmon 4 "journalctl -f" 6 htop
 ```
 
 Both scripts accept `-s SESSION` to choose a session name (defaults: `three`

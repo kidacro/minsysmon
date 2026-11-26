@@ -13,7 +13,7 @@
 #include <limits.h>
 #include <ctype.h>
 
-#define SYSMON_VERSION "0.1.0"
+#define MINSYSMON_VERSION "0.1.0"
 #define MAX_PROCS 100
 #define MIN_DISPLAY_PROCS 1
 #define MAX_DISPLAY_PROCS 20
@@ -931,7 +931,7 @@ static void print_usage(FILE *out, const char *prog) {
             "                           be non-interactive and exit (e.g. 'journalctl -n 10'),\n"
             "                           or the display will freeze; add '2>&1' or '2>/dev/null'\n"
             "                           so child stderr does not overwrite the screen\n"
-            "                           Example: sysmon -s 'journalctl -n 10 --no-pager 2>&1'\n"
+            "                           Example: minsysmon -s 'journalctl -n 10 --no-pager 2>&1'\n"
             "  -t, --taillines <count>  Tail lines for -l or -s (%d-%d, default: %d)\n"
             "  -h, --help               Show this help\n"
             "  -V, --version            Show version and exit\n",
@@ -1030,7 +1030,7 @@ int main(int argc, char *argv[]) {
             print_usage(stdout, argv[0]);
             return 0;
         } else if (strcmp(argv[i], "-V") == 0 || strcmp(argv[i], "--version") == 0) {
-            printf("sysmon %s\n", SYSMON_VERSION);
+            printf("minsysmon %s\n", MINSYSMON_VERSION);
             return 0;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
